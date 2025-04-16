@@ -81,6 +81,7 @@ def test_store_log():
     assert qsos_df.loc[0, "radio"] == "0"
     expected_datetime = datetime.strptime("2024-11-23 0000", "%Y-%m-%d %H%M")
     assert qsos_df.loc[0, "datetime"] == expected_datetime
+    assert qsos_df.loc[0, "id"] == "EF6T_0"
 
 
 def test_open_file():

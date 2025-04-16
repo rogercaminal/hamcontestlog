@@ -20,6 +20,8 @@ class LogBase(ABC):
     def __init__(self, path: str):
         self.path = path
         self.buffer: IO[str] | None = None
+        self.log: pd.DataFrame
+        self.metadata: pd.DataFrame
 
     @abstractmethod
     def open_file(self, path: str) -> IO[str]:
@@ -74,7 +76,7 @@ class LogBase(ABC):
                             "call": qso[8],
                             "rst": qso[9],
                             "exch": qso[10],
-                            "radio": qso[11],
+                            "radio": 0 if len(qso) < 12 else qso[11],
                         }
                     )
                 elif not line.startswith("X-QSO"):
@@ -84,6 +86,6 @@ class LogBase(ABC):
                     continue
         metadata_df = pd.DataFrame([metadata])
         qsos_df = pd.DataFrame(qsos).assign(
-                id=lambda x: pd.util.hash_pandas_object(x, index=False)  # type: ignore
+                id=lambda x: x["mycall"] + "_" + x.index.astype(str)
         )
         return metadata_df, qsos_df
