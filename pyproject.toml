@@ -20,6 +20,7 @@ python = "^3.10"
 click = ">=8.0.1"
 pandas = "^2.2.3"
 duckdb = "^1.2.1"
+pyhamtools = "^0.11.0"
 
 [tool.poetry.dev-dependencies]
 Pygments = ">=2.10.0"
