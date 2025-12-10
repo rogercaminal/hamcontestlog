@@ -16,6 +16,7 @@ classifiers = [
 Changelog = "https://github.com/rogercaminal/hamcontestlog/releases"
 
 [tool.poetry.dependencies]
+beautifulsoup4 = "^4.12"
 python = "^3.10"
 click = ">=8.0.1"
 pandas = "^2.2.3"

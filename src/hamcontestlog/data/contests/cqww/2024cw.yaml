@@ -1,0 +1,61 @@
+contest_id: 2024cw
+name: CQ World Wide DX Contest CW 2024
+sponsor: CQ
+mode: CW
+
+# Official contest weekend (approximate times, adjust if you want local vs UTC)
+start_time: 2024-11-23T00:00:00Z
+end_time: 2024-11-24T23:59:59Z
+
+bands:
+  - 160m
+  - 80m
+  - 40m
+  - 20m
+  - 15m
+  - 10m
+
+# Everything below here goes into metadata (free-form)
+exchange:
+  sent: "RST + CQ Zone"
+  received: "RST + CQ Zone"
+
+categories:
+  - SINGLE-OP ALL HIGH
+  - SINGLE-OP ALL LOW
+  - SINGLE-OP ALL QRP
+  - SINGLE-OP 160M
+  - SINGLE-OP 80M
+  - SINGLE-OP 40M
+  - SINGLE-OP 20M
+  - SINGLE-OP 15M
+  - SINGLE-OP 10M
+  - MULTI-ONE
+  - MULTI-TWO
+  - MULTI-MULTI
+  - CHECKLOG
+
+multipliers:
+  by_dxcc: true
+  by_zone: true
+  per_band: true
+
+scoring:
+  # This is illustrative — you’ll adapt it to however you implement scoring.
+  base_points:
+    same_continent: 1
+    different_continent: 3
+    same_country: 0
+  mult_types:
+    - dxcc
+    - cq_zone
+
+time_rules:
+  off_time_min_minutes: 60
+  off_time_min_segments: 2
+
+notes: >
+  CQ WW DX CW 2024. Exchange is RST + CQ Zone.
+  Multipliers: DXCC entities and CQ zones per band.
+  Scoring details and category definitions follow official CQ WW rules.
+
