@@ -1,26 +1,5 @@
 # HamContestLog
 
-[![PyPI](https://img.shields.io/pypi/v/hamcontestlog.svg)][pypi_]
-[![Status](https://img.shields.io/pypi/status/hamcontestlog.svg)][status]
-[![Python Version](https://img.shields.io/pypi/pyversions/hamcontestlog)][python version]
-[![License](https://img.shields.io/pypi/l/hamcontestlog)][license]
-
-[![Read the documentation at https://hamcontestlog.readthedocs.io/](https://img.shields.io/readthedocs/hamcontestlog/latest.svg?label=Read%20the%20Docs)][read the docs]
-[![Tests](https://github.com/rogercaminal/hamcontestlog/workflows/Tests/badge.svg)][tests]
-[![Codecov](https://codecov.io/gh/rogercaminal/hamcontestlog/branch/main/graph/badge.svg)][codecov]
-
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)][pre-commit]
-[![Black](https://img.shields.io/badge/code%20style-black-000000.svg)][black]
-
-[pypi_]: https://pypi.org/project/hamcontestlog/
-[status]: https://pypi.org/project/hamcontestlog/
-[python version]: https://pypi.org/project/hamcontestlog
-[read the docs]: https://hamcontestlog.readthedocs.io/
-[tests]: https://github.com/rogercaminal/hamcontestlog/actions?workflow=Tests
-[codecov]: https://app.codecov.io/gh/rogercaminal/hamcontestlog
-[pre-commit]: https://github.com/pre-commit/pre-commit
-[black]: https://github.com/psf/black
-
 `hamcontestlog` is a Python package and CLI tool to ingest, enrich, score, and analyze amateur radio contest logs.
 It is designed for **post‑contest analysis**, reproducibility, and large‑scale data exploration using DuckDB.
 
@@ -91,20 +70,35 @@ hamcontestlog/
 ```
 
 ---
-
 ## Installation
+
+### End users (from PyPI)
+
+```bash
+pip install hamcontestlog
+```
+
+### Development install
 
 ```bash
 git clone https://github.com/rogercaminal/hamcontestlog
 cd hamcontestlog
-pip install -e .
+python -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .[dev]
+pytest
 ```
+---
 
-Optional dependency for enrichment:
+## Packaging & tooling notes
 
-```bash
-pip install pyhamtools
-```
+This project intentionally keeps tooling **minimal**:
+
+- Standard **PEP 621** metadata in `pyproject.toml`
+- Installable and runnable with plain `pip`
+- No mandatory use of Poetry, nox, or external coverage services
+- Tests run directly with `pytest`
 
 ---
 
