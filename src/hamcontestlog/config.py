@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
+from datetime import datetime, timezone
 
 import importlib.resources as pkg_resources
 import yaml
@@ -36,20 +37,23 @@ class ContestConfig:
 
 
 def _parse_dt(value: Any) -> datetime:
-    """Parse a datetime from YAML which may already be a datetime or a string.
+    """Parse a datetime from YAML.
 
-    Accepts:
-    - datetime instances (returned as-is)
-    - ISO8601-like strings, including those ending in 'Z'
+    We deliberately treat all times as *naive UTC* and ignore timezone
+    offsets to avoid surprises when storing/reading from DuckDB.
     """
     if isinstance(value, datetime):
+        # If it's tz-aware, drop tzinfo and treat as UTC
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
 
     if isinstance(value, str):
         text = value.strip()
-        # Handle trailing 'Z' (Zulu / UTC) which datetime.fromisoformat doesn't accept
+        # If ends with 'Z' or has an offset, strip it and parse as naive
         if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
+            text = text[:-1]  # drop trailing Z, keep "YYYY-MM-DDTHH:MM:SS"
+        # You can also add logic here to strip "+00:00" etc. if you like.
         return datetime.fromisoformat(text)
 
     raise TypeError(f"Unsupported datetime value: {value!r} (type {type(value)})")

@@ -144,9 +144,6 @@ def _create_schema(con: duckdb.DuckDBPyConnection) -> None:
             rst_rcvd        TEXT,
             exch_sent       TEXT,
             exch_rcvd       TEXT,
-            dxcc            TEXT,
-            zone            INTEGER,
-            points          INTEGER,
             mult_flags      JSON
         );
         """
@@ -173,4 +170,42 @@ def _create_schema(con: duckdb.DuckDBPyConnection) -> None:
         );
         """
     )
+    # Call enrichment: per callsign static info (contest-agnostic)
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS call_enrichment (
+            callsign   TEXT PRIMARY KEY,
+            dxcc       TEXT,
+            cq_zone    INTEGER,
+            itu_zone   INTEGER,
+            continent  TEXT,
+            prefix     TEXT,
+            state      TEXT,
+            province   TEXT
+        );
+        """
+    )
+
+    # QSO scoring/multipliers: per QSO, contest-specific
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS qso_scoring (
+            qso_id          BIGINT PRIMARY KEY,
+            contest_id      TEXT,
+            dxcc            TEXT,
+            cq_zone         INTEGER,
+            itu_zone        INTEGER,
+            prefix          TEXT,
+            state           TEXT,
+            province        TEXT,
+            points          INTEGER,
+            is_mult_dxcc    BOOLEAN,
+            is_mult_cq_zone BOOLEAN,
+            is_mult_itu     BOOLEAN,
+            is_mult_prefix  BOOLEAN,
+            is_mult_state   BOOLEAN
+        );
+        """
+    )
+
 

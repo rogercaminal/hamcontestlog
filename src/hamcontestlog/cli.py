@@ -8,13 +8,14 @@ import click
 
 from . import __version__
 from .config import load_contest_config, upsert_contest_config
+from .enrich import enrich_calls_for_contest, populate_qso_scoring_for_contest
 from .fetch.cqww import CqwwContestSource
 from .fetch.http import stream_bytes
-from .fetch.rbn import SimpleRbnSource
 from .ingest.logs import ingest_cabrillo_stream
-from .ingest.rbn import ingest_rbn_urls
+from .ingest.rbn import ingest_rbn_for_contest
 from .analysis.rate import hourly_rate, band_mode_breakdown
 from .analysis.rbn_link import rbn_matches_for_station
+from .scoring.cqww import score_cqww_station
 
 
 @click.group()
@@ -131,21 +132,18 @@ def ingest_logs(contest_id: str, source_name: str, limit: Optional[int]) -> None
     click.echo(f"Finished ingesting {count} log(s) for {contest_id}.")
 
 
-@ingest.command("rbn")
-@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
-def ingest_rbn_cmd(contest_id: str) -> None:
-    """Ingest RBN data for the contest.
+@main.group()
+def rbn():
+    """RBN ingestion and analysis."""
 
-    Uses a simple RBN source that maps contest dates to one or more CSV/ZIP URLs.
-    """
-    source = SimpleRbnSource()
-    urls = list(source.urls_for_contest(contest_id))
-    if not urls:
-        click.echo(f"No RBN URLs configured for contest {contest_id}.")
-        return
 
-    ingest_rbn_urls(contest_id, urls)
-    click.echo(f"Ingested RBN from {len(urls)} URL(s) for {contest_id}.")
+@rbn.command("ingest")
+@click.option("--contest", "contest_id", required=True)
+def rbn_ingest_cmd(contest_id: str):
+    """Download & ingest RBN spots for a contest."""
+    click.echo(f"Fetching RBN spots for {contest_id}...")
+    n = ingest_rbn_for_contest(contest_id)
+    click.echo(f"Inserted {n} RBN spots.")
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +183,11 @@ def analyze_bands(contest_id: str, callsign: str) -> None:
 
     click.echo(f"Band/mode breakdown for {callsign.upper()} in {contest_id}:")
     for _, row in df.iterrows():
-        click.echo(f"{row['band']} {row['mode']}: {row['qsos']} QSOs")
+        click.echo(
+            f"{row['band']} {row['mode']}: "
+            f"{row['qsos']} QSOs, {row['points']} pts, "
+            f"DXCC mults: {row['dxcc_mults']}, CQZ mults: {row['cq_zone_mults']}"
+        )
 
 
 @analyze.command("rbn-coverage")
@@ -231,4 +233,42 @@ def analyze_rbn_coverage(
             f"{row['qso_time']} {row['band']} @ {row['freq_hz']} Hz -> "
             f"{row['spotter_call']} SNR {row['snr_db']} dB at {row['spot_time']}"
         )
+
+@main.group()
+def enrich() -> None:
+    """Enrichment commands (DXCC, zones, scoring info)."""
+    # subcommands below
+
+
+@enrich.command("calls")
+@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+def enrich_calls_cmd(contest_id: str) -> None:
+    """Enrich distinct callsigns for a contest using pyhamtools."""
+    click.echo(f"Enriching calls for contest {contest_id}...")
+    enrich_calls_for_contest(contest_id)
+    click.echo("Done.")
+
+
+@enrich.command("qsos")
+@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+def enrich_qsos_cmd(contest_id: str) -> None:
+    """Populate qso_scoring table for a contest."""
+    click.echo(f"Populating qso_scoring for contest {contest_id}...")
+    populate_qso_scoring_for_contest(contest_id)
+    click.echo("Done.")
+
+
+@main.group()
+def score() -> None:
+    """Scoring commands (per contest type)."""
+    # subcommands below
+
+@score.command("cqww")
+@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+@click.option("--call", "callsign", required=True, help="Station callsign.")
+def score_cqww_cmd(contest_id: str, callsign: str) -> None:
+    """Compute CQWW-style points and multipliers for a station."""
+    click.echo(f"Scoring CQWW for {callsign.upper()} in {contest_id}...")
+    score_cqww_station(contest_id, callsign)
+    click.echo("Done.")
 

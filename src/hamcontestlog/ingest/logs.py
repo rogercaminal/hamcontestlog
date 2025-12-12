@@ -180,12 +180,7 @@ def _parse_cabrillo_qso_line(line: str) -> Qso | None:
 
     # Frequency
     try:
-        freq = float(freq_str)
-        # If freq is like 7000 (kHz), turn into Hz; adapt as you prefer
-        if freq < 10000:  # probably MHz
-            freq_hz = freq * 1e6
-        else:  # kHz
-            freq_hz = freq * 1e3
+        freq_hz = float(freq_str) * 1e3
     except ValueError:
         freq_hz = None
 
