@@ -255,13 +255,18 @@ Times are treated as **UTC, naive**, to avoid timezone issues.
 ```bash
 hamcontestlog contest add-default cqww/2024cw.yaml
 ```
-
 ---
 
 ### Log ingestion
 
 ```bash
-hamcontestlog ingest log --contest 2024cw --call F4FGB
+hamcontestlog ingest log --contest 2024cw --call EF6T
+```
+
+or, for all available callsigns for the contest,
+
+```bash
+hamcontestlog ingest logs --contest 2024cw
 ```
 
 ---
@@ -285,7 +290,13 @@ hamcontestlog enrich qsos --contest 2024cw
 ### Scoring (CQWW)
 
 ```bash
-hamcontestlog score cqww --contest 2024cw --call F4FGB
+hamcontestlog score cqww --contest 2024cw --call EF6T
+```
+
+or, for all available callsigns for the contest,
+
+```bash
+hamcontestlog score cqww --contest 2024cw --all
 ```
 
 CQWW rules implemented:
