@@ -1,15 +1,16 @@
 # src/hamcontestlog/cli.py
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import click
 
 from . import __version__
 from .config import load_contest_config, upsert_contest_config
 from .enrich import enrich_calls_for_contest, populate_qso_scoring_for_contest
-from .fetch.cqww import CqwwContestSource
+from .fetch.cqww import CqwwContestSource, CqwwPublicLogsConfig
+from .fetch.arrl import ArrlContestSource, ArrlPublicLogsConfig
 from .fetch.http import stream_bytes
 from .ingest.logs import ingest_cabrillo_stream
 from .ingest.rbn import ingest_rbn_for_contest
@@ -45,7 +46,7 @@ def contest_add(config_file: Path) -> None:
 
     CONFIG_FILE should be a YAML file describing the contest, e.g.:
 
-        contest_id: 2024cw
+        contest_id: 2024cqwwcw
         name: CQ WW DX CW 2024
         sponsor: CQ
         mode: CW
@@ -79,57 +80,95 @@ def ingest() -> None:
 
 
 @ingest.command("log")
-@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+@click.option("--contest", "contest_id", required=True)
+@click.option("--call", "callsign", required=True)
 @click.option(
     "--source",
     "source_name",
-    default="cqww",
-    show_default=True,
-    type=click.Choice(["cqww"]),
-    help="Public log source.",
+    type=click.Choice(["cqww", "arrl"]),
+    default=None,
+    help="Log source backend. If omitted, uses contest metadata.log_source (default: cqww).",
 )
-@click.option("--call", "callsign", required=True, help="Station callsign.")
-def ingest_log(contest_id: str, source_name: str, callsign: str) -> None:
-    """Ingest a single station log from the public site."""
-    # For now, only CQWW is implemented as a source.
-    source = CqwwContestSource(contest_id)
+def ingest_log(contest_id: str, callsign: str, source_name: str | None):
+    """Ingest a single station log into the database."""
+    cfg = load_contest_config(contest_id)
+
+    if source_name is None:
+        raise ValueError("Please, provide a source_name.")
+
+    if source_name == "cqww":
+        cqww_cfg = CqwwPublicLogsConfig(
+            year=int(cfg.start_time.year),
+            mode=cfg.mode.lower() if cfg.mode.lower() != "ssb" else "ph"
+        ) 
+        source = CqwwContestSource(contest_id, cqww_cfg)
+
+    elif source_name == "arrl":
+        meta = cfg.metadata or {}
+        arrl_cfg = ArrlPublicLogsConfig(
+            eid=int(meta["arrl_eid"]),
+            year=int(meta["arrl_year"]),
+            iid=int(meta["arrl_iid"]) if meta.get("arrl_iid") is not None else None,
+        )
+        source = ArrlContestSource(contest_id, arrl_cfg)
+
+    else:
+        raise click.ClickException(f"Unknown source: {source_name}")
 
     url = source.log_url_for_callsign(callsign)
     fileobj = stream_bytes(url)
     ingest_cabrillo_stream(contest_id, fileobj)
-    click.echo(f"Ingested log for {callsign.upper()} ({contest_id}) from {url}")
+    click.echo(f"Ingested log for {callsign.upper()} from {source_name}.")
 
 
 @ingest.command("logs")
-@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+@click.option("--contest", "contest_id", required=True)
 @click.option(
     "--source",
     "source_name",
-    default="cqww",
-    show_default=True,
-    type=click.Choice(["cqww"]),
-    help="Public log source.",
-)
-@click.option(
-    "--limit",
-    type=int,
+    type=click.Choice(["cqww", "arrl"]),
     default=None,
-    help="Limit number of logs to ingest (for testing).",
+    help="Log source backend. If omitted, uses contest metadata.log_source (default: cqww).",
 )
-def ingest_logs(contest_id: str, source_name: str, limit: Optional[int]) -> None:
-    """Ingest all public logs for a contest."""
-    source = CqwwContestSource(contest_id)
+@click.option("--limit", type=int, default=None, help="Optional limit of logs to ingest.")
+def ingest_logs(contest_id: str, source_name: str | None, limit: int | None):
+    """Ingest all available public logs for the contest into the database."""
+    cfg = load_contest_config(contest_id)
+
+    if source_name is None:
+        raise ValueError("Please, provide a source_name.")
+
+    if source_name == "cqww":
+        cqww_cfg = CqwwPublicLogsConfig(
+            year=int(cfg.start_time.year),
+            mode=cfg.mode.lower() if cfg.mode.lower() != "ssb" else "ph"
+        ) 
+        source = CqwwContestSource(contest_id, cqww_cfg)
+
+    elif source_name == "arrl":
+        meta = cfg.metadata or {}
+        arrl_cfg = ArrlPublicLogsConfig(
+            eid=int(meta["arrl_eid"]),
+            year=int(meta["arrl_year"]),
+            iid=int(meta["arrl_iid"]) if meta.get("arrl_iid") is not None else None,
+        )
+        source = ArrlContestSource(contest_id, arrl_cfg)
+
+    else:
+        raise click.ClickException(f"Unknown source: {source_name}")
 
     count = 0
     for url in source.iter_log_urls():
-        fileobj = stream_bytes(url)
-        ingest_cabrillo_stream(contest_id, fileobj)
-        count += 1
-        click.echo(f"[{count}] Ingested {url}")
-        if limit is not None and count >= limit:
-            break
+        try:
+            fileobj = stream_bytes(url)
+            ingest_cabrillo_stream(contest_id, fileobj)
+            count += 1
+            if limit is not None and count >= limit:
+                break
+        except Exception as e:
+            click.echo(f"Failed ingest for {url}: {e}")
 
-    click.echo(f"Finished ingesting {count} log(s) for {contest_id}.")
+    click.echo(f"Ingested {count} logs from {source_name}.")
 
 
 @main.group()

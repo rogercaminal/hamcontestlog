@@ -2,175 +2,154 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, Optional
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
-import importlib.resources as pkg_resources
 import yaml
 
 from .db import connect
-import hamcontestlog.data.contests as builtin_contests
 
 
-# ---------------------------------------------------------------------------
-# Data model
-# ---------------------------------------------------------------------------
+# Package resource root for built-in contest YAMLs
+# This is a Python package directory: src/hamcontestlog/data/contests/
+BUILTIN_CONTESTS_PKG = "hamcontestlog.data.contests"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ContestConfig:
     contest_id: str
-    name: str
-    sponsor: str
-    mode: str
-    start_time: datetime
-    end_time: datetime
-    bands: list[str]
-    metadata: Dict[str, Any]
+    name: str = ""
+    sponsor: str = ""
+    mode: str = ""
+    start_time: datetime = datetime(1970, 1, 1)
+    end_time: datetime = datetime(1970, 1, 1)
+    bands: tuple[str, ...] = ()
+    metadata: Dict[str, Any] = None  # type: ignore[assignment]
+    scoring: Dict[str, Any] = None  # type: ignore[assignment]
+    notes: str = ""
+
+    def __post_init__(self):
+        object.__setattr__(self, "metadata", self.metadata or {})
+        object.__setattr__(self, "scoring", self.scoring or {})
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _parse_dt(value: Union[str, datetime]) -> datetime:
+    """
+    Parse datetimes coming from YAML.
 
-
-def _parse_dt(value: Any) -> datetime:
-    """Parse a datetime from YAML.
-
-    We deliberately treat all times as *naive UTC* and ignore timezone
-    offsets to avoid surprises when storing/reading from DuckDB.
+    - Accepts ISO strings with optional trailing 'Z'
+    - Accepts datetime objects
+    - Returns UTC-naive datetime (tzinfo=None)
     """
     if isinstance(value, datetime):
-        # If it's tz-aware, drop tzinfo and treat as UTC
-        if value.tzinfo is not None:
-            return value.astimezone(timezone.utc).replace(tzinfo=None)
-        return value
-
-    if isinstance(value, str):
-        text = value.strip()
-        # If ends with 'Z' or has an offset, strip it and parse as naive
-        if text.endswith("Z"):
-            text = text[:-1]  # drop trailing Z, keep "YYYY-MM-DDTHH:MM:SS"
-        # You can also add logic here to strip "+00:00" etc. if you like.
-        return datetime.fromisoformat(text)
-
-    raise TypeError(f"Unsupported datetime value: {value!r} (type {type(value)})")
-
-
-# ---------------------------------------------------------------------------
-# YAML loading helpers
-# ---------------------------------------------------------------------------
-
-
-def load_yaml_from_path(path: Path) -> Dict[str, Any]:
-    """Load a YAML file from a user-provided file path."""
-    return yaml.safe_load(path.read_text(encoding="utf8"))
-
-
-def load_yaml_from_package(package_path: str) -> Optional[Dict[str, Any]]:
-    """
-    Load a YAML file shipped inside the package.
-
-    The package path must be relative to hamcontestlog.data.contests.
-    Example: "cqww/2024cw.yaml"
-    """
-    try:
-        root = pkg_resources.files(builtin_contests)
-        resource = root.joinpath(package_path)
-    except Exception:
-        return None
-
-    if not resource.is_file():
-        return None
-
-    with resource.open("r", encoding="utf8") as f:
-        return yaml.safe_load(f)
-
-
-# ---------------------------------------------------------------------------
-# Public loading API
-# ---------------------------------------------------------------------------
-
-
-def load_contest_config(source: Path | str) -> ContestConfig:
-    """
-    Load a contest definition.
-
-    - If `source` is a Path → load user YAML (override)
-    - If `source` is a string → load built-in YAML from package defaults
-    """
-    if isinstance(source, Path):
-        data = load_yaml_from_path(source)
+        dt = value
     else:
-        data = load_yaml_from_package(source)
-        if data is None:
-            raise FileNotFoundError(
-                f"Default contest YAML '{source}' not found inside packaged defaults."
-            )
+        s = str(value).strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
 
-    return _parse_config(data)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def load_yaml_from_package(relative_path: str) -> Dict[str, Any]:
+    """
+    Load YAML from built-in package resources (supports nested paths like 'iaru/2024iaru.yaml').
+
+    IMPORTANT: this uses importlib.resources.files(), which supports subdirectories.
+    """
+    from importlib import resources
+
+    root = resources.files(BUILTIN_CONTESTS_PKG)
+    res = root.joinpath(relative_path)
+
+    if not res.is_file():
+        raise FileNotFoundError(
+            f"Default contest YAML '{relative_path}' not found inside packaged defaults ({BUILTIN_CONTESTS_PKG})."
+        )
+
+    text = res.read_text(encoding="utf-8")
+    data = yaml.safe_load(text) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"YAML resource '{relative_path}' did not parse to a mapping.")
+    return data
+
+
+def load_yaml_from_file(path: Union[str, Path]) -> Dict[str, Any]:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"YAML file not found: {p}")
+    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"YAML file '{p}' did not parse to a mapping.")
+    return data
 
 
 def _parse_config(data: Dict[str, Any]) -> ContestConfig:
-    """
-    Convert YAML dictionary into a ContestConfig.
-    Extra fields go into metadata.
-    """
-    start_raw = data["start_time"]
-    end_raw = data["end_time"]
+    contest_id = str(data.get("contest_id", "")).strip()
+    if not contest_id:
+        raise ValueError("contest_id is required in contest YAML/config")
 
-    start_time = _parse_dt(start_raw)
-    end_time = _parse_dt(end_raw)
+    start_time = _parse_dt(data["start_time"]) if "start_time" in data else datetime(1970, 1, 1)
+    end_time = _parse_dt(data["end_time"]) if "end_time" in data else datetime(1970, 1, 1)
+
+    bands = tuple(data.get("bands") or [])
 
     return ContestConfig(
-        contest_id=data["contest_id"],
-        name=data.get("name", data["contest_id"]),
-        sponsor=data.get("sponsor", ""),
-        mode=data.get("mode", ""),
+        contest_id=contest_id,
+        name=str(data.get("name", "")),
+        sponsor=str(data.get("sponsor", "")),
+        mode=str(data.get("mode", "")),
         start_time=start_time,
         end_time=end_time,
-        bands=list(data.get("bands", [])),
-        metadata={
-            k: v
-            for k, v in data.items()
-            if k
-            not in {
-                "contest_id",
-                "name",
-                "sponsor",
-                "mode",
-                "start_time",
-                "end_time",
-                "bands",
-            }
-        },
+        bands=bands,
+        metadata=dict(data.get("metadata") or {}),
+        scoring=dict(data.get("scoring") or {}),
+        notes=str(data.get("notes", "")),
     )
 
 
-# ---------------------------------------------------------------------------
-# DB operations
-# ---------------------------------------------------------------------------
+def load_contest_config(source: str) -> ContestConfig:
+    """
+    Load contest config in the most convenient way:
+
+    - If `source` looks like a file path that exists -> load YAML from disk
+    - Else try to load from DB by contest_id
+    - Else try built-in package defaults (relative path like 'cqww/2024cw.yaml', 'iaru/2024iaru.yaml', ...)
+    """
+    # 1) From disk YAML?
+    p = Path(source)
+    if p.exists() and p.is_file():
+        return _parse_config(load_yaml_from_file(p))
+
+    # 2) From DB as contest_id?
+    cfg = get_contest_config(source)
+    if cfg is not None:
+        return cfg
+
+    # 3) From packaged defaults by relative path
+    return _parse_config(load_yaml_from_package(source))
 
 
 def upsert_contest_config(cfg: ContestConfig) -> None:
-    """
-    Insert or update a contest definition into DuckDB.
-    """
+    import json
+
     with connect() as con:
         con.execute(
             """
             INSERT INTO contests (contest_id, name, sponsor, mode, start_time, end_time, bands, metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (contest_id) DO UPDATE SET
-                name = EXCLUDED.name,
-                sponsor = EXCLUDED.sponsor,
-                mode = EXCLUDED.mode,
-                start_time = EXCLUDED.start_time,
-                end_time = EXCLUDED.end_time,
-                bands = EXCLUDED.bands,
-                metadata = EXCLUDED.metadata;
+              name=excluded.name,
+              sponsor=excluded.sponsor,
+              mode=excluded.mode,
+              start_time=excluded.start_time,
+              end_time=excluded.end_time,
+              bands=excluded.bands,
+              metadata=excluded.metadata
             """,
             [
                 cfg.contest_id,
@@ -180,7 +159,54 @@ def upsert_contest_config(cfg: ContestConfig) -> None:
                 cfg.start_time,
                 cfg.end_time,
                 ",".join(cfg.bands),
-                cfg.metadata,
+                json.dumps(cfg.metadata or {}, ensure_ascii=False),
             ],
         )
+
+
+def get_contest_config(contest_id: str) -> Optional[ContestConfig]:
+    import json
+
+    cid = contest_id.strip()
+    if not cid:
+        return None
+
+    with connect() as con:
+        row = con.execute(
+            """
+            SELECT contest_id, name, sponsor, mode, start_time, end_time, bands, metadata
+            FROM contests
+            WHERE contest_id = ?
+            """,
+            [cid],
+        ).fetchone()
+
+    if not row:
+        return None
+
+    # DuckDB may return JSON as str or as already-parsed Python object depending on version/settings.
+    meta_raw = row[7]
+    if meta_raw is None:
+        metadata = {}
+    elif isinstance(meta_raw, dict):
+        metadata = meta_raw
+    else:
+        # assume string
+        try:
+            metadata = json.loads(str(meta_raw))
+        except Exception:
+            metadata = {}
+
+    bands = tuple([b for b in (row[6] or "").split(",") if b])
+
+    return ContestConfig(
+        contest_id=row[0],
+        name=row[1] or "",
+        sponsor=row[2] or "",
+        mode=row[3] or "",
+        start_time=row[4],
+        end_time=row[5],
+        bands=bands,
+        metadata=metadata,
+    )
 

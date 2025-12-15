@@ -1,0 +1,25 @@
+contest_id: 2024arrldxcw
+name: ARRL International DX Contest CW 2024
+sponsor: ARRL
+mode: CW
+
+start_time: 2024-02-17T00:00:00Z
+end_time:   2024-02-18T23:59:59Z
+
+bands:
+  - 160m
+  - 80m
+  - 40m
+  - 20m
+  - 15m
+  - 10m
+
+metadata:
+  log_source: arrl
+  arrl_eid: 13
+  arrl_year: 2024
+  arrl_iid: 1059
+
+scoring:
+  type: arrl-dx
+

@@ -1,0 +1,25 @@
+contest_id: 2024arrldxssb
+name: ARRL International DX Contest Phone 2024
+sponsor: ARRL
+mode: SSB
+
+start_time: 2024-03-02T00:00:00Z
+end_time:   2024-03-03T23:59:59Z
+
+bands:
+  - 160m
+  - 80m
+  - 40m
+  - 20m
+  - 15m
+  - 10m
+
+metadata:
+  log_source: arrl
+  arrl_eid: 14
+  arrl_year: 2024
+  arrl_iid: 1060
+
+scoring:
+  type: arrl-dx
+

@@ -1,6 +1,7 @@
 # src/hamcontestlog/fetch/cqww.py
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Iterable, List
 from urllib.parse import urljoin
 
@@ -9,29 +10,37 @@ from bs4 import BeautifulSoup  # add to pyproject dependencies
 
 from .base import ContestSource
 
-BASE_INDEX_URL = "https://cqww.com/publiclogs/{contest_id}/"
+BASE_INDEX_URL = "https://cqww.com/publiclogs/{year}{mode}/"
+
+
+@dataclass(frozen=True)
+class CqwwPublicLogsConfig:
+    """
+    Configuration for CQ WW public logs.
+
+    year : contest year shown on the public logs page
+    mode  : mode of the contest: cw or ph
+    """
+    year: int
+    mode: str
 
 
 class CqwwContestSource(ContestSource):
     """
     CQ WW public logs source.
-
-    contest_id should match the directory on cqww.com, e.g.:
-      - '2024cw'
-      - '2024ssb'
-      - '2023cw'
-      - etc.
     """
 
-    def __init__(self, contest_id: str) -> None:
+    def __init__(self, contest_id: str, cfg: CqwwPublicLogsConfig) -> None:
         self.contest_id = contest_id
+        self.year = cfg.year
+        self.mode = cfg.mode
 
     # ----- URLs -------------------------------------------------------------
 
     @property
     def index_url(self) -> str:
         """URL of the public logs index page."""
-        return BASE_INDEX_URL.format(contest_id=self.contest_id)
+        return BASE_INDEX_URL.format(year=self.year, mode=self.mode)
 
     def log_url_for_callsign(self, callsign: str) -> str:
         """

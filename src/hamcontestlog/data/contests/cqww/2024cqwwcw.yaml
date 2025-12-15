@@ -1,4 +1,4 @@
-contest_id: 2024cw
+contest_id: 2024cqwwcw
 name: CQ World Wide DX Contest CW 2024
 sponsor: CQ
 mode: CW
@@ -50,6 +50,9 @@ scoring:
     - dxcc
     - cq_zone
 
+metadata:
+  log_source: cqww
+
 time_rules:
   off_time_min_minutes: 60
   off_time_min_segments: 2
@@ -58,4 +61,3 @@ notes: >
   CQ WW DX CW 2024. Exchange is RST + CQ Zone.
   Multipliers: DXCC entities and CQ zones per band.
   Scoring details and category definitions follow official CQ WW rules.
-
