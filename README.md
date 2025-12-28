@@ -12,11 +12,11 @@ The project targets radio amateurs who want to combine **contest radio knowledge
 ### Core functionality
 
 - Contest definition management via YAML files
-- Download and ingest public contest logs
+- Download and ingest public contest logs (CQWW + ARRL)
 - Cabrillo-style log parsing
 - DuckDB-backed storage (single-file database)
 - Callsign enrichment (DXCC, zones, continent, prefix)
-- Contest scoring (CQWW implemented)
+- Contest scoring (CQWW, ARRL DX, IARU HF)
 - Reverse Beacon Network (RBN) historical ingestion
 - High-performance bulk CSV ingestion
 - SQL‑friendly analytics and Python interoperability
@@ -51,19 +51,28 @@ hamcontestlog/
 │   ├── config.py               # Contest config loading
 │   ├── data/
 │   │   └── contests/
-│   │       └── cqww/
-│   │           └── 2024cw.yaml
+│   │       ├── arrl/
+│   │       │   ├── 2024arrldxcw.yaml
+│   │       │   └── 2024arrldxssb.yaml
+│   │       ├── cqww/
+│   │       │   └── 2024cqwwcw.yaml
+│   │       └── iaru/
+│   │           └── 2024.yaml
 │   ├── ingest/
 │   │   ├── logs.py              # Contest log ingestion
 │   │   └── rbn.py               # RBN ingestion (bulk)
 │   ├── fetch/
+│   │   ├── arrl.py              # ARRL public logs
+│   │   ├── cqww.py              # CQWW public logs
 │   │   └── rbn.py               # RBN URL generation
 │   ├── enrich.py                # Callsign + QSO enrichment
 │   ├── scoring/
-│   │   └── cqww.py              # CQWW scoring rules
+│   │   ├── arrl.py              # ARRL DX scoring rules
+│   │   ├── cqww.py              # CQWW scoring rules
+│   │   └── iaru.py              # IARU HF scoring rules
 │   └── analysis/
 │       ├── rate.py
-│       └── bands.py
+│       └── rbn_link.py
 ├── README.md
 ├── pyproject.toml
 └── ...
@@ -176,6 +185,8 @@ Contest-agnostic callsign data.
 | itu_zone | ITU zone |
 | continent | continent |
 | prefix | callsign prefix |
+| state | US state |
+| province | VE province |
 
 Filled using `pyhamtools`. One lookup per distinct callsign.
 
@@ -188,12 +199,20 @@ Derived, contest-specific scoring.
 |------|------------|
 | qso_id | FK to qsos |
 | contest_id | contest |
+| dxcc | worked DXCC |
+| cq_zone | worked CQ zone |
+| itu_zone | worked ITU zone |
+| prefix | worked prefix |
+| state | worked US state |
+| province | worked VE province |
+| hq | IARU HQ identifier |
 | points | QSO points |
 | is_mult_dxcc | DXCC multiplier |
 | is_mult_cq_zone | CQ zone multiplier |
 | is_mult_itu | ITU multiplier |
 | is_mult_prefix | WPX multiplier |
 | is_mult_state | ARRL multiplier |
+| is_mult_hq | IARU HQ multiplier |
 
 This table can be dropped and recomputed at any time.
 
@@ -219,10 +238,10 @@ Reverse Beacon Network data.
 
 Contest definitions live in YAML files.
 
-Example: `cqww/2024cw.yaml`
+Example: `cqww/2024cqwwcw.yaml`
 
 ```yaml
-contest_id: 2024cw
+contest_id: 2024cqwwcw
 name: CQ World Wide DX Contest CW 2024
 mode: CW
 start_time: 2024-11-23T00:00:00Z
@@ -240,8 +259,9 @@ scoring:
   type: cqww
 
 multipliers:
-  dxcc: true
-  cq_zone: true
+  by_dxcc: true
+  by_zone: true
+  per_band: true
 ```
 
 Times are treated as **UTC, naive**, to avoid timezone issues.
@@ -253,20 +273,22 @@ Times are treated as **UTC, naive**, to avoid timezone issues.
 ### Add contest
 
 ```bash
-hamcontestlog contest add-default cqww/2024cw.yaml
+hamcontestlog contest add-default cqww/2024cqwwcw.yaml
 ```
 ---
 
 ### Log ingestion
 
+Specify the public log backend with `--source` (`cqww` or `arrl`).
+
 ```bash
-hamcontestlog ingest log --contest 2024cw --call EF6T
+hamcontestlog ingest log --contest 2024cqwwcw --call EF6T --source cqww
 ```
 
 or, for all available callsigns for the contest,
 
 ```bash
-hamcontestlog ingest logs --contest 2024cw
+hamcontestlog ingest logs --contest 2024cqwwcw --source cqww
 ```
 
 ---
@@ -274,7 +296,7 @@ hamcontestlog ingest logs --contest 2024cw
 ### Callsign enrichment
 
 ```bash
-hamcontestlog enrich calls --contest 2024cw
+hamcontestlog enrich calls --contest 2024cqwwcw
 ```
 
 ---
@@ -282,7 +304,7 @@ hamcontestlog enrich calls --contest 2024cw
 ### QSO enrichment
 
 ```bash
-hamcontestlog enrich qsos --contest 2024cw
+hamcontestlog enrich qsos --contest 2024cqwwcw
 ```
 
 ---
@@ -290,13 +312,13 @@ hamcontestlog enrich qsos --contest 2024cw
 ### Scoring (CQWW)
 
 ```bash
-hamcontestlog score cqww --contest 2024cw --call EF6T
+hamcontestlog score cqww --contest 2024cqwwcw --call EF6T
 ```
 
 or, for all available callsigns for the contest,
 
 ```bash
-hamcontestlog score cqww --contest 2024cw --all
+hamcontestlog score cqww --contest 2024cqwwcw --all
 ```
 
 CQWW rules implemented:
@@ -308,10 +330,26 @@ CQWW rules implemented:
 
 ---
 
+### Scoring (ARRL DX)
+
+```bash
+hamcontestlog score arrl --contest 2024arrldxcw --call EF6T
+```
+
+---
+
+### Scoring (IARU HF)
+
+```bash
+hamcontestlog score iaru --contest 2024iaru --call EF6T
+```
+
+---
+
 ### Reverse Beacon Network ingestion
 
 ```bash
-hamcontestlog rbn ingest --contest 2024cw
+hamcontestlog rbn ingest --contest 2024cqwwcw
 ```
 
 - Downloads daily RBN history ZIP files
@@ -331,7 +369,7 @@ with connect() as con:
         SELECT band, SUM(points) AS pts
         FROM qsos q
         JOIN qso_scoring s USING (qso_id)
-        WHERE s.contest_id = '2024cw'
+        WHERE s.contest_id = '2024cqwwcw'
         GROUP BY band
     """).fetchdf()
 
@@ -340,13 +378,17 @@ print(df)
 
 ---
 
-## Extending to other contests
+## Supported contests
 
-Supported by design:
+Currently implemented:
 
-- IARU (ITU zones, HQ stations)
+- CQWW (CW)
+- ARRL DX (CW/SSB)
+- IARU HF
+
+Planned/illustrative:
+
 - WPX (prefix multipliers)
-- ARRL DX (states/provinces)
 
 Steps to add a contest:
 
@@ -359,7 +401,7 @@ Steps to add a contest:
 ## Limitations
 
 - No real-time logging
-- Only CQWW fully implemented
+- Limited contest roster (CQWW, ARRL DX, IARU)
 - RBN ingestion is historical
 - Exchange parsing is contest-specific
 
