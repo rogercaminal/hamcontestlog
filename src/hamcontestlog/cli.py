@@ -17,6 +17,8 @@ from .ingest.rbn import ingest_rbn_for_contest
 from .analysis.rate import hourly_rate, band_mode_breakdown
 from .analysis.rbn_link import rbn_matches_for_station
 from .scoring.cqww import score_cqww_station
+from .scoring.arrl import score_arrldx_station
+from .scoring.iaru import score_iaru_station
 
 
 @click.group()
@@ -309,5 +311,25 @@ def score_cqww_cmd(contest_id: str, callsign: str) -> None:
     """Compute CQWW-style points and multipliers for a station."""
     click.echo(f"Scoring CQWW for {callsign.upper()} in {contest_id}...")
     score_cqww_station(contest_id, callsign)
+    click.echo("Done.")
+
+
+@score.command("arrl")
+@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+@click.option("--call", "callsign", required=True, help="Station callsign.")
+def score_arrl_cmd(contest_id: str, callsign: str) -> None:
+    """Compute ARRL DX-style points and multipliers for a station."""
+    click.echo(f"Scoring ARRL DX for {callsign.upper()} in {contest_id}...")
+    score_arrldx_station(contest_id, callsign)
+    click.echo("Done.")
+
+
+@score.command("iaru")
+@click.option("--contest", "contest_id", required=True, help="Contest ID, e.g. 2024cw.")
+@click.option("--call", "callsign", required=True, help="Station callsign.")
+def score_iaru_cmd(contest_id: str, callsign: str) -> None:
+    """Compute IARU HF-style points and multipliers for a station."""
+    click.echo(f"Scoring IARU HF for {callsign.upper()} in {contest_id}...")
+    score_iaru_station(contest_id, callsign)
     click.echo("Done.")
 

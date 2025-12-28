@@ -5,15 +5,22 @@ from typing import Dict, Optional, Set
 from hamcontestlog.db import connect
 
 
-def _is_hq_exchange(exch: Optional[str]) -> bool:
+def _parse_itu_or_hq(exch: Optional[str]) -> tuple[Optional[int], Optional[str]]:
     """
-    IARU exchange:
-      - normal station: numeric ITU zone
-      - HQ station: society abbreviation (non-numeric)
+    Normalize a received exchange into either an ITU zone (int) or HQ string.
+    Returns (itu_zone, hq).
     """
     if not exch:
-        return False
-    return not exch.strip().isdigit()
+        return None, None
+
+    cleaned = exch.strip()
+    if cleaned.isdigit():
+        try:
+            return int(cleaned), None
+        except ValueError:
+            return None, None
+
+    return None, cleaned.upper()
 
 
 def score_iaru_station(contest_id: str, callsign: str) -> Dict[str, int]:
@@ -38,6 +45,22 @@ def score_iaru_station(contest_id: str, callsign: str) -> Dict[str, int]:
         ).fetchone()
 
         my_cont, my_itu = row if row else (None, None)
+
+        # Prefer the operator's actual sent exchange for zone if present
+        my_exchange = con.execute(
+            """
+            SELECT exch_sent
+            FROM qsos q
+            JOIN logs l ON q.log_id=l.log_id
+            WHERE l.contest_id=? AND l.callsign=? AND exch_sent IS NOT NULL
+            LIMIT 1
+            """,
+            [contest_id, call],
+        ).fetchone()
+        if my_exchange:
+            sent_itu, _ = _parse_itu_or_hq(my_exchange[0])
+            if sent_itu is not None:
+                my_itu = sent_itu
 
         qsos = con.execute(
             """
@@ -68,12 +91,14 @@ def score_iaru_station(contest_id: str, callsign: str) -> Dict[str, int]:
             seen_itu.setdefault(band, set())
             seen_hq.setdefault(band, set())
 
-            hq = exch.strip().upper() if _is_hq_exchange(exch) else None
+            # Prefer the copied exchange for ITU/HQ, fall back to lookup
+            exch_itu, hq = _parse_itu_or_hq(exch)
+            dx_zone = exch_itu if exch_itu is not None else (int(dx_itu) if dx_itu is not None else None)
 
             # ----- points -----
             if hq:
                 points = 1
-            elif my_itu and dx_itu and int(my_itu) == int(dx_itu):
+            elif my_itu is not None and dx_zone is not None and int(my_itu) == int(dx_zone):
                 points = 1
             elif my_cont and dx_cont and my_cont == dx_cont:
                 points = 3
@@ -88,21 +113,24 @@ def score_iaru_station(contest_id: str, callsign: str) -> Dict[str, int]:
                 if hq not in seen_hq[band]:
                     seen_hq[band].add(hq)
                     is_mult_hq = True
-            elif dx_itu:
-                z = int(dx_itu)
-                if z not in seen_itu[band]:
-                    seen_itu[band].add(z)
+            elif dx_zone is not None:
+                if dx_zone not in seen_itu[band]:
+                    seen_itu[band].add(dx_zone)
                     is_mult_itu = True
 
             total_pts += points
             total_mults += int(is_mult_itu) + int(is_mult_hq)
 
-            updates.append((points, hq, is_mult_itu, is_mult_hq, contest_id, qso_id))
+            updates.append((points, dx_zone, hq, is_mult_itu, is_mult_hq, contest_id, qso_id))
 
         con.executemany(
             """
             UPDATE qso_scoring
-            SET points=?, hq=?, is_mult_itu=?, is_mult_hq=?
+            SET points=?,
+                itu_zone=?,
+                hq=?,
+                is_mult_itu=?,
+                is_mult_hq=?
             WHERE contest_id=? AND qso_id=?
             """,
             updates,
@@ -113,4 +141,3 @@ def score_iaru_station(contest_id: str, callsign: str) -> Dict[str, int]:
         "multipliers": total_mults,
         "score": total_pts * total_mults,
     }
-

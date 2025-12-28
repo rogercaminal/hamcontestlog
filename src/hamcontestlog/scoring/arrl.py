@@ -38,7 +38,8 @@ def score_arrldx_station(contest_id: str, callsign: str) -> Dict[str, int]:
               q.band,
               ce.dxcc,
               ce.state,
-              ce.province
+              ce.province,
+              q.exch_rcvd
             FROM qsos q
             JOIN logs l ON q.log_id=l.log_id
             LEFT JOIN call_enrichment ce ON ce.callsign=q.their_call
@@ -55,41 +56,60 @@ def score_arrldx_station(contest_id: str, callsign: str) -> Dict[str, int]:
         total_mults = 0
         updates = []
 
-        for qso_id, band, dx_dxcc, dx_state, dx_prov in qsos:
+        for qso_id, band, dx_dxcc, dx_state, dx_prov, exch_rcvd in qsos:
             band = band or "UNKNOWN"
             seen_dxcc.setdefault(band, set())
             seen_state.setdefault(band, set())
 
             dx_is_wve = _is_wve(dx_dxcc)
+            exchange_sp = exch_rcvd.strip().upper() if exch_rcvd else None
 
             if my_is_wve == dx_is_wve:
                 points = 0
                 is_mult_dxcc = False
                 is_mult_state = False
+                sp_for_record = None
             else:
                 points = 3
                 is_mult_dxcc = False
                 is_mult_state = False
+                sp_for_record = None
 
                 if my_is_wve:
                     if dx_dxcc and dx_dxcc not in seen_dxcc[band]:
                         seen_dxcc[band].add(dx_dxcc)
                         is_mult_dxcc = True
                 else:
-                    sp = dx_state or dx_prov
+                    # DX station works W/VE; multiplier is the copied state/province
+                    sp = exchange_sp or dx_state or dx_prov
                     if sp and sp not in seen_state[band]:
                         seen_state[band].add(sp)
                         is_mult_state = True
+                    sp_for_record = sp
 
             total_pts += points
             total_mults += int(is_mult_dxcc) + int(is_mult_state)
 
-            updates.append((points, is_mult_dxcc, is_mult_state, contest_id, qso_id))
+            updates.append(
+                (
+                    points,
+                    sp_for_record,
+                    sp_for_record,
+                    is_mult_dxcc,
+                    is_mult_state,
+                    contest_id,
+                    qso_id,
+                )
+            )
 
         con.executemany(
             """
             UPDATE qso_scoring
-            SET points=?, is_mult_dxcc=?, is_mult_state=?
+            SET points=?,
+                state=COALESCE(?, state),
+                province=COALESCE(?, province),
+                is_mult_dxcc=?,
+                is_mult_state=?
             WHERE contest_id=? AND qso_id=?
             """,
             updates,
@@ -100,4 +120,3 @@ def score_arrldx_station(contest_id: str, callsign: str) -> Dict[str, int]:
         "multipliers": total_mults,
         "score": total_pts * total_mults,
     }
-

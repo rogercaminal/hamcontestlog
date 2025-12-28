@@ -29,6 +29,7 @@ def score_cqww_station(contest_id: str, callsign: str) -> None:
     with connect() as con:
         _set_points(con, contest_id, callsign)
         _reset_mult_flags(con, contest_id, callsign)
+        _apply_cq_zones_from_exchange(con, contest_id, callsign)
         _set_dxcc_multipliers(con, contest_id, callsign)
         _set_cq_zone_multipliers(con, contest_id, callsign)
 
@@ -73,6 +74,28 @@ def _set_points(con: duckdb.DuckDBPyConnection, contest_id: str, callsign: str) 
         JOIN logs l ON q.log_id = l.log_id
         LEFT JOIN call_enrichment my ON l.callsign = my.callsign
         LEFT JOIN call_enrichment dx ON q.their_call = dx.callsign
+        WHERE s.qso_id = q.qso_id
+          AND s.contest_id = l.contest_id
+          AND l.contest_id = ?
+          AND l.callsign = ?;
+        """,
+        [contest_id, callsign],
+    )
+
+
+def _apply_cq_zones_from_exchange(con: duckdb.DuckDBPyConnection, contest_id: str, callsign: str) -> None:
+    """
+    For CQWW the zone multiplier comes from the copied exchange, not lookup.
+
+    Normalize cq_zone from exch_rcvd when it parses as an integer, otherwise
+    leave whatever enrichment provided as a fallback.
+    """
+    con.execute(
+        """
+        UPDATE qso_scoring AS s
+        SET cq_zone = COALESCE(TRY_CAST(q.exch_rcvd AS INTEGER), s.cq_zone)
+        FROM qsos q
+        JOIN logs l ON q.log_id = l.log_id
         WHERE s.qso_id = q.qso_id
           AND s.contest_id = l.contest_id
           AND l.contest_id = ?
@@ -162,4 +185,3 @@ def _set_cq_zone_multipliers(con: duckdb.DuckDBPyConnection, contest_id: str, ca
         """,
         [contest_id, contest_id, callsign],
     )
-

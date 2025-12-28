@@ -123,8 +123,8 @@ def populate_qso_scoring_for_contest(contest_id: str) -> None:
         con.execute(
             """
             INSERT INTO qso_scoring (
-                qso_id, contest_id, dxcc, cq_zone, itu_zone, prefix, state, province, points,
-                is_mult_dxcc, is_mult_cq_zone, is_mult_itu, is_mult_prefix, is_mult_state
+                qso_id, contest_id, dxcc, cq_zone, itu_zone, prefix, state, province, hq, points,
+                is_mult_dxcc, is_mult_cq_zone, is_mult_itu, is_mult_prefix, is_mult_state, is_mult_hq
             )
             SELECT
                 q.qso_id,
@@ -135,12 +135,14 @@ def populate_qso_scoring_for_contest(contest_id: str) -> None:
                 e.prefix,
                 e.state,
                 e.province,
+                NULL::TEXT AS hq,
                 NULL::INTEGER AS points,
                 FALSE AS is_mult_dxcc,
                 FALSE AS is_mult_cq_zone,
                 FALSE AS is_mult_itu,
                 FALSE AS is_mult_prefix,
-                FALSE AS is_mult_state
+                FALSE AS is_mult_state,
+                FALSE AS is_mult_hq
             FROM qsos q
             JOIN logs l ON q.log_id = l.log_id
             LEFT JOIN call_enrichment e
@@ -149,4 +151,3 @@ def populate_qso_scoring_for_contest(contest_id: str) -> None:
             """,
             [contest_id],
         )
-

@@ -198,14 +198,25 @@ def _create_schema(con: duckdb.DuckDBPyConnection) -> None:
             prefix          TEXT,
             state           TEXT,
             province        TEXT,
+            hq              TEXT,
             points          INTEGER,
             is_mult_dxcc    BOOLEAN,
             is_mult_cq_zone BOOLEAN,
             is_mult_itu     BOOLEAN,
             is_mult_prefix  BOOLEAN,
-            is_mult_state   BOOLEAN
+            is_mult_state   BOOLEAN,
+            is_mult_hq      BOOLEAN
         );
         """
     )
-
+    con.execute(
+        """
+        ALTER TABLE qso_scoring ADD COLUMN IF NOT EXISTS hq TEXT;
+        """
+    )
+    con.execute(
+        """
+        ALTER TABLE qso_scoring ADD COLUMN IF NOT EXISTS is_mult_hq BOOLEAN DEFAULT FALSE;
+        """
+    )
 
