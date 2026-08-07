@@ -62,7 +62,7 @@ def contest_add(config_file: Path) -> None:
     click.echo(f"Contest {cfg.contest_id} stored/updated.")
 
 
-@contest.command("add-default")
+@contest.command("add")
 @click.argument("default_path", type=str)
 def contest_add_default(default_path: str) -> None:
     """Load a default contest config bundled with the package."""

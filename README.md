@@ -273,7 +273,7 @@ Times are treated as **UTC, naive**, to avoid timezone issues.
 ### Add contest
 
 ```bash
-hamcontestlog contest add-default cqww/2024cqwwcw.yaml
+hamcontestlog contest add cqww/2024cqwwcw.yaml
 ```
 ---
 
