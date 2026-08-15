@@ -81,10 +81,11 @@ hamcontestlog/
 ---
 ## Installation
 
-### End users (from PyPI)
+### End users
 
 ```bash
-pip install hamcontestlog
+uv tool install --python 3.12 hamcontestlog
+hamcontestlog --help
 ```
 
 ### Development install
@@ -92,12 +93,18 @@ pip install hamcontestlog
 ```bash
 git clone https://github.com/rogercaminal/hamcontestlog
 cd hamcontestlog
-python -m venv .venv
+
+uv python install 3.12
+uv venv --python 3.12 .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -e .[dev]
+
+uv pip install -e ".[dev]"
 pytest
+hamcontestlog --help
 ```
+
+After activation, `python`, `pip`, `pytest`, and `hamcontestlog` all run from `.venv`.
+
 ---
 
 ## Packaging & tooling notes
@@ -105,7 +112,7 @@ pytest
 This project intentionally keeps tooling **minimal**:
 
 - Standard **PEP 621** metadata in `pyproject.toml`
-- Installable and runnable with plain `pip`
+- Installable and runnable with `uv`
 - No mandatory use of Poetry, nox, or external coverage services
 - Tests run directly with `pytest`
 
