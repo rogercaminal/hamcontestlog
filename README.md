@@ -270,92 +270,76 @@ Times are treated as **UTC, naive**, to avoid timezone issues.
 
 ## CLI usage
 
-### Add contest
+Every command opens the DuckDB database and creates the schema if it does not already exist.
+The table impact below describes the command's logical reads and writes after the schema exists.
+
+### Command reference
+
+| command | purpose | tables read | tables written |
+|------|------|------|------|
+| `hamcontestlog --help` | Show CLI help. | none | none |
+| `hamcontestlog --version` | Show installed package version. | none | none |
+| `hamcontestlog contest add CONFIG_OR_DEFAULT` | Add or update a contest definition from a YAML file, built-in default path such as `cqww/2024cqwwcw.yaml`, or an existing contest id. | `contests` when resolving an existing contest id | `contests` |
+| `hamcontestlog ingest log --contest CONTEST --call CALL --source cqww\|arrl` | Download and ingest one public Cabrillo log. | `contests` | `logs`, `qsos` |
+| `hamcontestlog ingest logs --contest CONTEST --source cqww\|arrl [--limit N]` | Download and ingest all discoverable public Cabrillo logs for a contest, optionally capped by `--limit`. | `contests` | `logs`, `qsos` |
+| `hamcontestlog rbn ingest --contest CONTEST` | Download historical RBN ZIP files covering the contest window and bulk-load matching spots. | `contests`, `rbn_spots` | `rbn_spots` |
+| `hamcontestlog enrich calls --contest CONTEST` | Enrich every distinct callsign seen in the contest QSOs with DXCC, zones, continent, prefix, state, and province. | `logs`, `qsos` | `call_enrichment` |
+| `hamcontestlog enrich qsos --contest CONTEST` | Rebuild per-QSO scoring seed rows for the contest. Run this after `enrich calls` and before scoring. | `logs`, `qsos`, `call_enrichment`, `qso_scoring` | `qso_scoring` |
+| `hamcontestlog score cqww --contest CONTEST --call CALL` | Compute CQWW points and DXCC/CQ-zone multiplier flags for one submitted log. | `logs`, `qsos`, `call_enrichment`, `qso_scoring` | `qso_scoring` |
+| `hamcontestlog score arrl --contest CONTEST --call CALL` | Compute ARRL DX points and DXCC or state/province multiplier flags for one submitted log. | `logs`, `qsos`, `call_enrichment` | `qso_scoring` |
+| `hamcontestlog score iaru --contest CONTEST --call CALL` | Compute IARU HF points and ITU/HQ multiplier flags for one submitted log. | `logs`, `qsos`, `call_enrichment` | `qso_scoring` |
+| `hamcontestlog analyze rate --contest CONTEST --call CALL` | Print hourly QSO count and scored point totals when scoring exists. | `logs`, `qsos`, `qso_scoring` | none |
+| `hamcontestlog analyze bands --contest CONTEST --call CALL` | Print QSO, point, DXCC multiplier, and CQ-zone multiplier totals by band and mode. | `logs`, `qsos`, `qso_scoring` | none |
+| `hamcontestlog analyze rbn-coverage --contest CONTEST --call CALL [--time-window SEC] [--freq-window HZ]` | Match the station's QSOs against nearby RBN spots by time and frequency. | `logs`, `qsos`, `rbn_spots` | none |
+
+### Typical contest workflow
 
 ```bash
 hamcontestlog contest add cqww/2024cqwwcw.yaml
-```
----
-
-### Log ingestion
-
-Specify the public log backend with `--source` (`cqww` or `arrl`).
-
-```bash
 hamcontestlog ingest log --contest 2024cqwwcw --call EF6T --source cqww
-```
-
-or, for all available callsigns for the contest,
-
-```bash
-hamcontestlog ingest logs --contest 2024cqwwcw --source cqww
-```
-
----
-
-### Callsign enrichment
-
-```bash
 hamcontestlog enrich calls --contest 2024cqwwcw
-```
-
----
-
-### QSO enrichment
-
-```bash
 hamcontestlog enrich qsos --contest 2024cqwwcw
-```
-
----
-
-### Scoring (CQWW)
-
-```bash
 hamcontestlog score cqww --contest 2024cqwwcw --call EF6T
+hamcontestlog analyze bands --contest 2024cqwwcw --call EF6T
 ```
 
-or, for all available callsigns for the contest,
+For batch ingestion:
 
 ```bash
-hamcontestlog score cqww --contest 2024cqwwcw --all
+hamcontestlog ingest logs --contest 2024cqwwcw --source cqww --limit 100
 ```
+
+For RBN analysis:
+
+```bash
+hamcontestlog rbn ingest --contest 2024cqwwcw
+hamcontestlog analyze rbn-coverage --contest 2024cqwwcw --call EF6T
+```
+
+### Scoring notes
+
+`enrich qsos` resets and repopulates `qso_scoring` for the contest. The `score ...` commands then update those rows for one station at a time.
 
 CQWW rules implemented:
 
 - Same country: 0 points
-- Same continent (non‑NA): 1 point
-- NA ↔ NA (different country): 2 points
+- Same continent, non-NA: 1 point
+- North America to North America, different countries: 2 points
 - Different continents: 3 points
 
----
+ARRL DX rules implemented:
 
-### Scoring (ARRL DX)
+- Valid QSOs are between W/VE and DX stations
+- Valid QSOs are 3 points
+- W/VE stations count DXCC multipliers by band
+- DX stations count US state and VE province multipliers by band
 
-```bash
-hamcontestlog score arrl --contest 2024arrldxcw --call EF6T
-```
+IARU HF rules implemented:
 
----
-
-### Scoring (IARU HF)
-
-```bash
-hamcontestlog score iaru --contest 2024iaru --call EF6T
-```
-
----
-
-### Reverse Beacon Network ingestion
-
-```bash
-hamcontestlog rbn ingest --contest 2024cqwwcw
-```
-
-- Downloads daily RBN history ZIP files
-- Uses DuckDB bulk CSV ingestion
-- Skips malformed rows
-- Filters by contest window
+- Same ITU zone or HQ station: 1 point
+- Different ITU zone, same continent: 3 points
+- Different continent: 5 points
+- ITU zones and HQ societies are multipliers by band
 
 ---
 
