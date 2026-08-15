@@ -103,7 +103,14 @@ pytest
 hamcontestlog --help
 ```
 
-After activation, `python`, `pip`, `pytest`, and `hamcontestlog` all run from `.venv`.
+After activation, `python`, `pip`, `pytest`, `jupyter lab`, and `hamcontestlog` all run from `.venv`.
+JupyterLab is part of the development extra only; it is not installed when end users install `hamcontestlog`.
+
+Start JupyterLab from the activated environment when you need it:
+
+```bash
+jupyter lab
+```
 
 ---
 

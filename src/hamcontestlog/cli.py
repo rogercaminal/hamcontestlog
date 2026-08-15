@@ -14,8 +14,6 @@ from .fetch.arrl import ArrlContestSource, ArrlPublicLogsConfig
 from .fetch.http import stream_bytes
 from .ingest.logs import ingest_cabrillo_stream
 from .ingest.rbn import ingest_rbn_for_contest
-from .analysis.rate import hourly_rate, band_mode_breakdown
-from .analysis.rbn_link import rbn_matches_for_station
 from .scoring.cqww import score_cqww_station
 from .scoring.arrl import score_arrldx_station
 from .scoring.iaru import score_iaru_station
@@ -202,6 +200,8 @@ def analyze() -> None:
 @click.option("--call", "callsign", required=True, help="Station callsign.")
 def analyze_rate(contest_id: str, callsign: str) -> None:
     """Show hourly QSO rates for a station."""
+    from .analysis.rate import hourly_rate
+
     df = hourly_rate(contest_id, callsign)
     if df.empty:
         click.echo("No QSOs found.")
@@ -217,6 +217,8 @@ def analyze_rate(contest_id: str, callsign: str) -> None:
 @click.option("--call", "callsign", required=True, help="Station callsign.")
 def analyze_bands(contest_id: str, callsign: str) -> None:
     """Show QSOs per band/mode for a station."""
+    from .analysis.rate import band_mode_breakdown
+
     df = band_mode_breakdown(contest_id, callsign)
     if df.empty:
         click.echo("No QSOs found.")
@@ -255,6 +257,8 @@ def analyze_rbn_coverage(
     freq_window: float,
 ) -> None:
     """Show QSOs with nearest RBN spots for a station."""
+    from .analysis.rbn_link import rbn_matches_for_station
+
     df = rbn_matches_for_station(
         contest_id=contest_id,
         callsign=callsign,
@@ -332,4 +336,3 @@ def score_iaru_cmd(contest_id: str, callsign: str) -> None:
     click.echo(f"Scoring IARU HF for {callsign.upper()} in {contest_id}...")
     score_iaru_station(contest_id, callsign)
     click.echo("Done.")
-
